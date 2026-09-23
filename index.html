@@ -1,33 +1,227 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-    <title>MYCFOODS · Cartelera Digital</title>
+<title>MYCFOODS · Cartelera Digital</title>
 
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 
-    <link
-        href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap"
-        rel="stylesheet"
-    >
+<link
+    href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap"
+    rel="stylesheet"
+>
 
-    <link rel="stylesheet" href="style.css">
+<style>
+
+:root {
+    --negro: #0b0b0b;
+    --dorado: #f1a80a;
+    --blanco: #ffffff;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+html,
+body {
+    margin: 0;
+    padding: 0;
+
+    width: 100%;
+    height: 100%;
+
+    overflow: hidden;
+
+    background: var(--negro);
+
+    font-family: "Montserrat", sans-serif;
+}
+
+#cartelera {
+    position: fixed;
+
+    inset: 0;
+
+    width: 100vw;
+    height: 100vh;
+
+    overflow: hidden;
+
+    background: #000;
+}
+
+#pantalla {
+    position: absolute;
+
+    inset: 0;
+
+    width: 100%;
+    height: 100%;
+}
+
+.slide {
+    position: absolute;
+
+    inset: 0;
+
+    width: 100%;
+    height: 100%;
+
+    display: flex;
+
+    align-items: center;
+    justify-content: center;
+
+    opacity: 0;
+
+    transition:
+        opacity 0.8s ease;
+}
+
+.slide.activo {
+    opacity: 1;
+}
+
+
+/* Fondo desenfocado */
+
+.fondo {
+    position: absolute;
+
+    inset: -40px;
+
+    width: calc(100% + 80px) !important;
+    height: calc(100% + 80px) !important;
+
+    object-fit: cover !important;
+
+    filter: blur(30px);
+
+    transform: scale(1.1);
+
+    opacity: 0.42;
+
+    z-index: 1;
+}
+
+
+/* Imagen principal */
+
+.imagen {
+    position: relative;
+
+    z-index: 2;
+
+    width: 100%;
+    height: 100%;
+
+    object-fit: contain;
+}
+
+
+/* Oscurecimiento inferior */
+
+.degradado {
+    position: absolute;
+
+    inset: 0;
+
+    z-index: 3;
+
+    pointer-events: none;
+
+    background:
+        linear-gradient(
+            to bottom,
+            rgba(0,0,0,0) 55%,
+            rgba(0,0,0,0.45) 100%
+        );
+}
+
+
+/* Marca */
+
+#marca {
+    position: fixed;
+
+    z-index: 20;
+
+    left: 28px;
+    bottom: 24px;
+
+    padding: 10px 18px;
+
+    background: rgba(11,11,11,0.82);
+
+    border-left: 4px solid var(--dorado);
+
+    color: var(--blanco);
+
+    font-size: 22px;
+
+    font-weight: 800;
+
+    letter-spacing: 2px;
+
+    user-select: none;
+}
+
+</style>
 </head>
+
 
 <body>
 
-    <main id="cartelera">
+<div id="cartelera">
 
-        <section id="pantalla"></section>
+    <div id="pantalla"></div>
 
-        <div id="marca">MYCFOODS</div>
+    <div id="marca">
+        MYCFOODS
+    </div>
 
-    </main>
+</div>
 
-    <script src="app.js"></script>
 
-</body>
-</html>
+<script>
+
+/* =========================================================
+   MYCFOODS · CARTELERA
+   REPRODUCTOR BASE
+   ========================================================= */
+
+
+const contenidos = [
+
+    {
+        tipo: "foto",
+
+        archivo:
+            "media/fotos/Albóndigas con salsa y puré de papas_20260922_095614_0000.png",
+
+        duracion: 5000
+    },
+
+
+    {
+        tipo: "foto",
+
+        archivo:
+            "media/fotos/box_dia_de_la_madre_historia-4.jpg",
+
+        duracion: 5000
+    },
+
+
+    {
+        tipo: "foto",
+
+        archivo:
+            "media/fotos/file_00000000ee40820eb02e991bf44310ad.png",
+
+        duracion: 5000
+   
