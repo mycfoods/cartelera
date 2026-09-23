@@ -1,1 +1,224 @@
+:root {
+    --negro: #0b0b0b;
+    --negro-2: #141414;
+    --dorado: #f1a80a;
+    --blanco: #ffffff;
+}
 
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+html,
+body {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+}
+
+body {
+    background: var(--negro);
+    color: var(--blanco);
+    font-family: "Montserrat", sans-serif;
+}
+
+/* =====================================================
+   PANTALLA PRINCIPAL
+===================================================== */
+
+#cartelera {
+    position: relative;
+
+    width: 100vw;
+    height: 100vh;
+
+    overflow: hidden;
+
+    background: var(--negro);
+}
+
+#pantalla {
+    position: absolute;
+
+    inset: 0;
+
+    width: 100%;
+    height: 100%;
+}
+
+/* =====================================================
+   SLIDE
+===================================================== */
+
+.slide {
+    position: absolute;
+
+    inset: 0;
+
+    width: 100%;
+    height: 100%;
+
+    opacity: 0;
+
+    transition: opacity 900ms ease;
+
+    overflow: hidden;
+}
+
+.slide.activo {
+    opacity: 1;
+}
+
+/* =====================================================
+   FONDO DE LA FOTO
+===================================================== */
+
+.fondo {
+    position: absolute;
+
+    inset: -5%;
+
+    width: 110%;
+    height: 110%;
+
+    object-fit: cover;
+
+    filter: blur(25px);
+
+    transform: scale(1.1);
+
+    opacity: 0.45;
+}
+
+/* =====================================================
+   FOTO PRINCIPAL
+===================================================== */
+
+.foto {
+    position: absolute;
+
+    z-index: 2;
+
+    inset: 0;
+
+    width: 100%;
+    height: 100%;
+
+    object-fit: contain;
+}
+
+/* =====================================================
+   VIDEO
+===================================================== */
+
+.video {
+    position: absolute;
+
+    z-index: 2;
+
+    inset: 0;
+
+    width: 100%;
+    height: 100%;
+
+    object-fit: cover;
+}
+
+/* =====================================================
+   DEGRADADO
+===================================================== */
+
+.degradado {
+    position: absolute;
+
+    z-index: 5;
+
+    inset: 0;
+
+    pointer-events: none;
+
+    background:
+        linear-gradient(
+            to top,
+            rgba(0, 0, 0, 0.65),
+            transparent 35%
+        );
+}
+
+/* =====================================================
+   INFORMACIÓN
+===================================================== */
+
+.informacion {
+    position: absolute;
+
+    z-index: 10;
+
+    left: 6%;
+    bottom: 9%;
+
+    max-width: 55%;
+
+    text-shadow:
+        0 3px 15px rgba(0, 0, 0, 0.8);
+}
+
+.titulo {
+    font-size: clamp(32px, 4vw, 76px);
+
+    font-weight: 800;
+
+    line-height: 1.05;
+}
+
+.descripcion {
+    margin-top: 10px;
+
+    font-size: clamp(16px, 1.5vw, 28px);
+
+    font-weight: 500;
+}
+
+.precio {
+    display: inline-block;
+
+    margin-top: 18px;
+
+    padding: 9px 18px;
+
+    background: var(--dorado);
+
+    color: #000;
+
+    border-radius: 4px;
+
+    font-size: clamp(20px, 2vw, 34px);
+
+    font-weight: 800;
+}
+
+/* =====================================================
+   LOGO
+===================================================== */
+
+#marca {
+    position: absolute;
+
+    z-index: 50;
+
+    right: 28px;
+    bottom: 22px;
+
+    font-size: 21px;
+
+    font-weight: 800;
+
+    letter-spacing: 2px;
+
+    color: #fff;
+
+    text-shadow:
+        0 2px 12px rgba(0, 0, 0, 0.8);
+              }
