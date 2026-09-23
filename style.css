@@ -45,8 +45,6 @@ body { color: var(--white); }
 }
 
 
-/* SLIDES */
-
 .slide {
     position: absolute;
     inset: 0;
@@ -56,7 +54,7 @@ body { color: var(--white); }
     align-items: center;
     justify-content: center;
     opacity: 0;
-    transition: opacity 0.8s ease;
+    transition: opacity 1.2s ease-in-out;
 }
 
 .slide.activo { opacity: 1; }
