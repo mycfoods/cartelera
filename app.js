@@ -120,8 +120,6 @@ let videoActual = null;
 
 let adminAbierto = false;
 
-let menuActivo = false;
-
 let db = null;
 
 
@@ -427,10 +425,6 @@ async function iniciar() {
         ];
 
 
-        /*
-           Eliminamos duplicados por ID.
-        */
-
         const mapa =
             new Map();
 
@@ -451,6 +445,9 @@ async function iniciar() {
             Array.from(
                 mapa.values()
             );
+
+
+        await reconstruirURLsLocales();
 
 
         prepararContenido();
@@ -1201,4 +1198,919 @@ function abrirAdministrador() {
     cargarAdministrador();
 
 
- 
+    document
+        .getElementById("adminCerrar")
+        .onclick =
+        cerrarAdministrador;
+
+
+    document
+        .getElementById("adminAgregar")
+        .onclick =
+        agregarArchivo;
+
+
+    document
+        .getElementById("menuGuardar")
+        .onclick =
+        guardarMenuDesdeAdmin;
+
+}
+
+
+/* =========================================================
+   CERRAR ADMIN
+   ========================================================= */
+
+function cerrarAdministrador() {
+
+    const panel =
+        document.getElementById(
+            "admin-cartelera"
+        );
+
+
+    if (panel) {
+
+        panel.remove();
+
+    }
+
+
+    adminAbierto = false;
+
+
+    posicion = 0;
+
+
+    prepararContenido();
+
+}
+
+
+/* =========================================================
+   CARGAR ADMIN
+   ========================================================= */
+
+function cargarAdministrador() {
+
+    cargarListaAdmin();
+
+    cargarFormularioMenu();
+
+}
+
+
+/* =========================================================
+   LISTA ADMIN
+   ========================================================= */
+
+function cargarListaAdmin() {
+
+    const lista =
+        document.getElementById(
+            "adminLista"
+        );
+
+
+    if (!lista) {
+        return;
+    }
+
+
+    lista.innerHTML = "";
+
+
+    contenido.forEach(
+        function(item, index) {
+
+            const fila =
+                document.createElement(
+                    "div"
+                );
+
+
+            fila.className =
+                "admin-item";
+
+
+            const numero =
+                document.createElement(
+                    "div"
+                );
+
+
+            numero.className =
+                "admin-numero";
+
+
+            numero.textContent =
+                index + 1;
+
+
+            const info =
+                document.createElement(
+                    "div"
+                );
+
+
+            info.className =
+                "admin-info";
+
+
+            const nombre =
+                document.createElement(
+                    "strong"
+                );
+
+
+            nombre.textContent =
+                item.nombre ||
+                "Contenido";
+
+
+            const tipo =
+                document.createElement(
+                    "small"
+                );
+
+
+            tipo.textContent =
+                item.tipo +
+                (
+                    item.activo === false
+                    ? " · OCULTO"
+                    : ""
+                );
+
+
+            info.appendChild(
+                nombre
+            );
+
+
+            info.appendChild(
+                tipo
+            );
+
+
+            fila.appendChild(
+                numero
+            );
+
+
+            fila.appendChild(
+                info
+            );
+
+
+            if (
+                item.tipo !== "video"
+            ) {
+
+                const duracion =
+                    document.createElement(
+                        "input"
+                    );
+
+
+                duracion.className =
+                    "admin-duracion";
+
+
+                duracion.type =
+                    "number";
+
+
+                duracion.min = "1";
+
+
+                duracion.value =
+                    Number(item.duracion) ||
+                    5;
+
+
+                duracion.title =
+                    "Segundos";
+
+
+                duracion.onchange =
+                    async function() {
+
+                        item.duracion =
+                            Math.max(
+                                1,
+                                Number(
+                                    duracion.value
+                                ) || 5
+                            );
+
+
+                        await guardarItemSiLocal(
+                            item
+                        );
+
+                    };
+
+
+                fila.appendChild(
+                    duracion
+                );
+
+            }
+
+
+            const subir =
+                crearBoton(
+                    "↑",
+                    "admin-btn"
+                );
+
+
+            subir.onclick =
+                function() {
+
+                    moverContenido(
+                        index,
+                        -1
+                    );
+
+                };
+
+
+            fila.appendChild(
+                subir
+            );
+
+
+            const bajar =
+                crearBoton(
+                    "↓",
+                    "admin-btn"
+                );
+
+
+            bajar.onclick =
+                function() {
+
+                    moverContenido(
+                        index,
+                        1
+                    );
+
+                };
+
+
+            fila.appendChild(
+                bajar
+            );
+
+
+            const activar =
+                crearBoton(
+                    item.activo === false
+                        ? "Mostrar"
+                        : "Ocultar",
+                    "admin-btn"
+                );
+
+
+            activar.onclick =
+                async function() {
+
+                    item.activo =
+                        item.activo === false;
+
+
+                    await guardarItemSiLocal(
+                        item
+                    );
+
+
+                    cargarListaAdmin();
+
+
+                    posicion = 0;
+
+                    prepararContenido();
+
+                };
+
+
+            fila.appendChild(
+                activar
+            );
+
+
+            if (
+                item.origen === "local"
+            ) {
+
+                const eliminar =
+                    crearBoton(
+                        "Eliminar",
+                        "admin-btn danger"
+                    );
+
+
+                eliminar.onclick =
+                    function() {
+
+                        eliminarContenido(
+                            item,
+                            index
+                        );
+
+                    };
+
+
+                fila.appendChild(
+                    eliminar
+                );
+
+            }
+
+
+            lista.appendChild(
+                fila
+            );
+
+        }
+    );
+
+}
+
+
+/* =========================================================
+   CREAR BOTÓN
+   ========================================================= */
+
+function crearBoton(
+    texto,
+    clase
+) {
+
+    const boton =
+        document.createElement(
+            "button"
+        );
+
+
+    boton.className =
+        clase;
+
+
+    boton.textContent =
+        texto;
+
+
+    return boton;
+
+}
+
+
+/* =========================================================
+   MOVER CONTENIDO
+   ========================================================= */
+
+async function moverContenido(
+    index,
+    direccion
+) {
+
+    const nuevoIndice =
+        index + direccion;
+
+
+    if (
+        nuevoIndice < 0 ||
+        nuevoIndice >= contenido.length
+    ) {
+
+        return;
+
+    }
+
+
+    const temporal =
+        contenido[index];
+
+
+    contenido[index] =
+        contenido[nuevoIndice];
+
+
+    contenido[nuevoIndice] =
+        temporal;
+
+
+    for (
+        let i = 0;
+        i < contenido.length;
+        i++
+    ) {
+
+        contenido[i].orden =
+            i;
+
+        await guardarItemSiLocal(
+            contenido[i]
+        );
+
+    }
+
+
+    cargarListaAdmin();
+
+
+    posicion = 0;
+
+    prepararContenido();
+
+}
+
+
+/* =========================================================
+   GUARDAR ITEM LOCAL
+   ========================================================= */
+
+async function guardarItemSiLocal(item) {
+
+    if (
+        item.origen !== "local"
+    ) {
+
+        return;
+
+    }
+
+
+    await guardarArchivoLocal(
+        item
+    );
+
+}
+
+
+/* =========================================================
+   ELIMINAR CONTENIDO
+   ========================================================= */
+
+async function eliminarContenido(
+    item,
+    index
+) {
+
+    if (
+        item.origen !== "local"
+    ) {
+
+        return;
+
+    }
+
+
+    const confirmar =
+        confirm(
+            "¿Eliminar este contenido de la cartelera?"
+        );
+
+
+    if (!confirmar) {
+        return;
+    }
+
+
+    await borrarArchivoLocal(
+        item.id
+    );
+
+
+    contenido.splice(
+        index,
+        1
+    );
+
+
+    cargarListaAdmin();
+
+
+    posicion = 0;
+
+    prepararContenido();
+
+}
+
+
+/* =========================================================
+   AGREGAR FOTO / VIDEO
+   ========================================================= */
+
+async function agregarArchivo() {
+
+    const input =
+        document.getElementById(
+            "adminArchivo"
+        );
+
+
+    const mensaje =
+        document.getElementById(
+            "adminMensaje"
+        );
+
+
+    if (
+        !input ||
+        !input.files ||
+        !input.files.length
+    ) {
+
+        mensaje.textContent =
+            "Seleccioná primero una foto o video.";
+
+        return;
+
+    }
+
+
+    const archivo =
+        input.files[0];
+
+
+    const tipo =
+        archivo.type.startsWith(
+            "video/"
+        )
+        ? "video"
+        : "foto";
+
+
+    const id =
+        "local-" +
+        Date.now() +
+        "-" +
+        Math.random()
+            .toString(36)
+            .substring(2);
+
+
+    const nuevo = {
+
+        id: id,
+
+        tipo: tipo,
+
+        nombre:
+            archivo.name,
+
+        blob:
+            archivo,
+
+        duracion:
+            tipo === "foto"
+                ? 5
+                : 0,
+
+        activo: true,
+
+        origen: "local",
+
+        orden:
+            contenido.length
+
+    };
+
+
+    try {
+
+        await guardarArchivoLocal(
+            nuevo
+        );
+
+
+        nuevo.archivo =
+            URL.createObjectURL(
+                archivo
+            );
+
+
+        contenido.push(
+            nuevo
+        );
+
+
+        input.value = "";
+
+
+        mensaje.textContent =
+            "Contenido agregado correctamente.";
+
+
+        cargarListaAdmin();
+
+
+        posicion = 0;
+
+        prepararContenido();
+
+    }
+
+    catch(error) {
+
+        console.error(
+            error
+        );
+
+
+        mensaje.textContent =
+            "No se pudo guardar el archivo.";
+
+    }
+
+}
+
+
+/* =========================================================
+   RECONSTRUIR URLs DE ARCHIVOS LOCALES
+   ========================================================= */
+
+async function reconstruirURLsLocales() {
+
+    for (
+        const item of contenido
+    ) {
+
+        if (
+            item.origen === "local" &&
+            item.blob &&
+            !item.archivo
+        ) {
+
+            item.archivo =
+                URL.createObjectURL(
+                    item.blob
+                );
+
+        }
+
+    }
+
+}
+
+
+/* =========================================================
+   FORMULARIO MENÚ
+   ========================================================= */
+
+function cargarFormularioMenu() {
+
+    const config =
+        obtenerConfiguracion();
+
+
+    const titulo =
+        document.getElementById(
+            "menuTitulo"
+        );
+
+
+    const texto =
+        document.getElementById(
+            "menuTexto"
+        );
+
+
+    const precio =
+        document.getElementById(
+            "menuPrecio"
+        );
+
+
+    const mostrar =
+        document.getElementById(
+            "menuMostrar"
+        );
+
+
+    if (titulo) {
+
+        titulo.value =
+            config.titulo || "";
+
+    }
+
+
+    if (texto) {
+
+        texto.value =
+            config.texto || "";
+
+    }
+
+
+    if (precio) {
+
+        precio.value =
+            config.precio || "";
+
+    }
+
+
+    if (mostrar) {
+
+        mostrar.checked =
+            config.mostrarMenu === true;
+
+    }
+
+}
+
+
+/* =========================================================
+   GUARDAR MENÚ
+   ========================================================= */
+
+function guardarMenuDesdeAdmin() {
+
+    const titulo =
+        document.getElementById(
+            "menuTitulo"
+        );
+
+
+    const texto =
+        document.getElementById(
+            "menuTexto"
+        );
+
+
+    const precio =
+        document.getElementById(
+            "menuPrecio"
+        );
+
+
+    const mostrar =
+        document.getElementById(
+            "menuMostrar"
+        );
+
+
+    const config = {
+
+        titulo:
+            titulo.value.trim() ||
+            "MENÚ DEL DÍA",
+
+        texto:
+            texto.value.trim(),
+
+        precio:
+            precio.value.trim(),
+
+        mostrarMenu:
+            mostrar.checked,
+
+        duracion:
+            7
+
+    };
+
+
+    guardarConfiguracion(
+        config
+    );
+
+
+    posicion = 0;
+
+
+    prepararContenido();
+
+
+    const mensaje =
+        document.getElementById(
+            "adminMensaje"
+        );
+
+
+    if (mensaje) {
+
+        mensaje.textContent =
+            "Menú del Día guardado.";
+
+    }
+
+}
+
+
+/* =========================================================
+   ATAJO ADMIN
+   CTRL + ALT + A
+   ========================================================= */
+
+document.addEventListener(
+    "keydown",
+    function(event) {
+
+        if (
+            event.ctrlKey &&
+            event.altKey &&
+            event.key.toLowerCase() === "a"
+        ) {
+
+            event.preventDefault();
+
+            abrirAdministrador();
+
+        }
+
+
+        if (
+            event.key === "Escape" &&
+            adminAbierto
+        ) {
+
+            cerrarAdministrador();
+
+        }
+
+    }
+);
+
+
+/* =========================================================
+   ABRIR ADMIN POR URL
+   ========================================================= */
+
+function comprobarModoAdminURL() {
+
+    const parametros =
+        new URLSearchParams(
+            window.location.search
+        );
+
+
+    if (
+        parametros.get("admin") === "1"
+    ) {
+
+        abrirAdministrador();
+
+    }
+
+}
+
+
+/* =========================================================
+   LIMPIEZA DE URLs TEMPORALES
+   ========================================================= */
+
+window.addEventListener(
+    "beforeunload",
+    function() {
+
+        contenido.forEach(
+            function(item) {
+
+                if (
+                    item.origen === "local" &&
+                    item.archivo &&
+                    item.archivo.startsWith(
+                        "blob:"
+                    )
+                ) {
+
+                    try {
+
+                        URL.revokeObjectURL(
+                            item.archivo
+                        );
+
+                    }
+
+                    catch {}
+
+                }
+
+            }
+        );
+
+    }
+);
+
+
+/* =========================================================
+   INICIO FINAL
+   ========================================================= */
+
+(async function() {
+
+    await iniciar();
+
+    prepararContenido();
+
+    comprobarModoAdminURL();
+
+})();
