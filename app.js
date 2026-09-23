@@ -2106,11 +2106,6 @@ window.addEventListener(
    ========================================================= */
 
 (async function() {
-
     await iniciar();
-
-    prepararContenido();
-
     comprobarModoAdminURL();
-
 })();
