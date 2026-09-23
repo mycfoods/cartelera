@@ -125,7 +125,23 @@ let db = null;
 
 const pantalla =
     document.getElementById("pantalla");
+const agregarOriginal = pantalla.appendChild.bind(pantalla);
 
+pantalla.appendChild = function(nodo) {
+
+    const anteriores =
+        Array.from(pantalla.querySelectorAll(".slide"));
+
+    agregarOriginal(nodo);
+
+    setTimeout(function() {
+        anteriores.forEach(function(s) {
+            s.remove();
+        });
+    }, 1500);
+
+    return nodo;
+};
 
 /* =========================================================
    INDEXED DB
@@ -604,8 +620,6 @@ function mostrarActual() {
     const item =
         activos[posicion];
 
-
-    pantalla.innerHTML = "";
 
 
     videoActual = null;
