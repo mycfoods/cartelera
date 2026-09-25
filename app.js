@@ -101,7 +101,7 @@ const CONFIG_INICIAL = {
         "",
 
     duracion:
-        7
+        10
 
 };
 
@@ -507,7 +507,7 @@ function obtenerContenidoActivo() {
             nombre: "Menú del Día",
 
             duracion:
-                Number(config.duracion) || 7,
+                Number(config.duracion) || 10,
 
             activo: true,
 
@@ -950,7 +950,7 @@ function mostrarMenu() {
             siguiente,
             (
                 Number(config.duracion) ||
-                7
+                10
             ) * 1000
         );
 
