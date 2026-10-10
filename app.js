@@ -1,1171 +1,654 @@
 /* =========================================================
-   MYCFOODS · CARGA AUTOMÁTICA DESDE GITHUB
-   Detecta fotos y videos dentro de la carpeta media
+   MYCFOODS · CARTELERA DIGITAL
+   SISTEMA COMPLETO
 ========================================================= */
 
-async function obtenerContenidoGitHub() {
+/* CONFIGURACIÓN */
+const DB_NAME = "mycfoods_cartelera";
+const DB_VERSION = 1;
+const STORE_NAME = "medios";
+const CONFIG_KEY = "mycfoods_cartelera_config";
 
-    const API_BASE =
-        "https://api.github.com/repos/mycfoods/cartelera/contents/";
+const CONFIG_INICIAL = {
+    mostrarMenu: false,
+    titulo: "MENÚ DEL DÍA",
+    texto: "",
+    precio: "",
+    duracion: 10
+};
 
+/* CONTENIDO INICIAL DE RESPALDO */
+const CONTENIDO_INICIAL = [
+    {
+        id: "github-foto-1",
+        tipo: "foto",
+        archivo: "media/fotos/Albóndigas con salsa y puré de papas_20260922_095614_0000.png",
+        nombre: "Albóndigas con salsa y puré de papas",
+        duracion: 5,
+        activo: true,
+        origen: "github"
+    },
+    {
+        id: "github-foto-2",
+        tipo: "foto",
+        archivo: "media/fotos/box_dia_de_la_madre_historia-4.jpg",
+        nombre: "Box Día de la Madre",
+        duracion: 5,
+        activo: true,
+        origen: "github"
+    },
+    {
+        id: "github-foto-3",
+        tipo: "foto",
+        archivo: "media/fotos/file_00000000ee40820eb02e991bf44310ad.png",
+        nombre: "Foto MYCFOODS",
+        duracion: 5,
+        activo: true,
+        origen: "github"
+    }
+];
+
+/* =========================================================
+   CARGA AUTOMÁTICA DESDE GITHUB
+========================================================= */
+
+async function obtenerContenidoGitHub(ruta = "media") {
     const extensionesFoto = [
-        ".jpg",
-        ".jpeg",
-        ".png",
-        ".webp",
-        ".gif",
-        ".avif"
+        ".jpg", ".jpeg", ".png", ".webp",
+        ".gif", ".avif", ".svg"
     ];
 
     const extensionesVideo = [
-        ".mp4",
-        ".webm",
-        ".mov",
-        ".m4v",
-        ".ogv"
+        ".mp4", ".webm", ".mov", ".m4v", ".ogv"
     ];
 
-    const archivosEncontrados = [];
+    const respuesta = await fetch(
+        `https://api.github.com/repos/mycfoods/cartelera/contents/${ruta}`
+    );
 
-    async function recorrerCarpeta(ruta) {
-
-        try {
-
-            const respuesta = await fetch(
-                API_BASE +
-                ruta.split("/").map(encodeURIComponent).join("/") +
-                "?ref=main",
-                {
-                    headers: {
-                        "Accept": "application/vnd.github+json"
-                    }
-                }
-            );
-
-            if (!respuesta.ok) {
-
-                console.warn(
-                    "MYCFOODS · No se pudo consultar:",
-                    ruta,
-                    respuesta.status
-                );
-
-                return;
-
-            }
-
-            const elementos = await respuesta.json();
-
-            if (!Array.isArray(elementos)) {
-                return;
-            }
-
-            elementos.sort(function(a, b) {
-
-                return a.name.localeCompare(
-                    b.name,
-                    "es",
-                    {
-                        numeric: true,
-                        sensitivity: "base"
-                    }
-                );
-
-            });
-
-            for (const elemento of elementos) {
-
-                if (elemento.type === "dir") {
-
-                    await recorrerCarpeta(elemento.path);
-
-                    continue;
-
-                }
-
-                if (elemento.type !== "file") {
-                    continue;
-                }
-
-                const nombreArchivo =
-                    elemento.name.toLowerCase();
-
-                const esFoto =
-                    extensionesFoto.some(function(extension) {
-                        return nombreArchivo.endsWith(extension);
-                    });
-
-                const esVideo =
-                    extensionesVideo.some(function(extension) {
-                        return nombreArchivo.endsWith(extension);
-                    });
-
-                if (!esFoto && !esVideo) {
-                    continue;
-                }
-
-                archivosEncontrados.push({
-
-                    id: "github-auto-" + elemento.path,
-
-                    tipo: esVideo ? "video" : "foto",
-
-                    archivo: elemento.path,
-
-                    nombre: elemento.name.replace(
-                        /\.(jpg|jpeg|png|webp|gif|avif|mp4|webm|mov|m4v|ogv)$/i,
-                        ""
-                    ).replace(/[_-]+/g, " "),
-
-                    duracion: 5,
-
-                    activo: true,
-
-                    origen: "github"
-
-                });
-
-            }
-
-        } catch (error) {
-
-            console.error(
-                "MYCFOODS · Error leyendo carpeta:",
-                ruta,
-                error
-            );
-
-        }
-
+    if (!respuesta.ok) {
+        throw new Error(
+            `GitHub respondió ${respuesta.status} al consultar ${ruta}`
+        );
     }
 
-    await recorrerCarpeta("media");
+    const elementos = await respuesta.json();
+    const encontrados = [];
 
-    archivosEncontrados.sort(function(a, b) {
+    for (const elemento of elementos) {
+        if (elemento.type === "dir") {
+            const subcarpeta = await obtenerContenidoGitHub(
+                elemento.path
+            );
 
-        return a.archivo.localeCompare(
-            b.archivo,
-            "es",
-            {
-                numeric: true,
-                sensitivity: "base"
-            }
+            encontrados.push(...subcarpeta);
+            continue;
+        }
+
+        if (elemento.type !== "file") continue;
+
+        const nombre = elemento.name || "";
+        const nombreMinuscula = nombre.toLowerCase();
+
+        const esFoto = extensionesFoto.some(
+            ext => nombreMinuscula.endsWith(ext)
         );
 
-    });
+        const esVideo = extensionesVideo.some(
+            ext => nombreMinuscula.endsWith(ext)
+        );
 
-    return archivosEncontrados;
+        if (!esFoto && !esVideo) continue;
 
+        const rutaCodificada = elemento.path
+            .split("/")
+            .map(parte => encodeURIComponent(parte))
+            .join("/");
+
+        encontrados.push({
+            id: `github-${elemento.path}`,
+            tipo: esVideo ? "video" : "foto",
+            archivo: rutaCodificada,
+            nombre: nombre.replace(/\.[^.]+$/, ""),
+            duracion: esVideo ? 0 : 5,
+            activo: true,
+            origen: "github"
+        });
+    }
+
+    return encontrados;
 }
-/* =========================================================
-   CONFIGURACIÓN DEL MENÚ
-   ========================================================= */
-
-const CONFIG_INICIAL = {
-
-    mostrarMenu: false,
-
-    titulo:
-        "MENÚ DEL DÍA",
-
-    texto:
-        "",
-
-    precio:
-        "",
-
-    duracion:
-        10
-
-};
-
 
 /* =========================================================
    VARIABLES
-   ========================================================= */
+========================================================= */
 
 let contenido = [];
-
 let posicion = 0;
-
 let temporizador = null;
-
 let videoActual = null;
-
 let adminAbierto = false;
-
 let db = null;
 
-
-const pantalla =
-    document.getElementById("pantalla");
-
+const pantalla = document.getElementById("pantalla");
 
 /* =========================================================
-   INDEXED DB
-   ========================================================= */
+   BASE DE DATOS
+========================================================= */
 
 function abrirBaseDatos() {
-
     return new Promise((resolve, reject) => {
+        const request = indexedDB.open(
+            DB_NAME,
+            DB_VERSION
+        );
 
-        const request =
-            indexedDB.open(
-                DB_NAME,
-                DB_VERSION
-            );
+        request.onupgradeneeded = function(event) {
+            const database = event.target.result;
 
+            if (!database.objectStoreNames.contains(STORE_NAME)) {
+                database.createObjectStore(STORE_NAME, {
+                    keyPath: "id"
+                });
+            }
+        };
 
-        request.onupgradeneeded =
-            function(event) {
+        request.onsuccess = function(event) {
+            db = event.target.result;
 
-                const database =
-                    event.target.result;
-
-
-                if (
-                    !database.objectStoreNames
-                        .contains(STORE_NAME)
-                ) {
-
-                    database.createObjectStore(
-                        STORE_NAME,
-                        {
-                            keyPath: "id"
-                        }
-                    );
-
-                }
-
+            db.onversionchange = function() {
+                db.close();
             };
 
+            resolve(db);
+        };
 
-        request.onsuccess =
-            function(event) {
-
-                db =
-                    event.target.result;
-
-                resolve(db);
-
-            };
-
-
-        request.onerror =
-            function() {
-
-                reject(request.error);
-
-            };
-
+        request.onerror = function() {
+            reject(request.error);
+        };
     });
-
 }
 
-
-/* =========================================================
-   OBTENER ARCHIVOS LOCALES
-   ========================================================= */
+/* OBTENER ARCHIVOS LOCALES */
 
 async function obtenerArchivosLocales() {
-
     if (!db) {
         await abrirBaseDatos();
     }
 
+    return new Promise((resolve, reject) => {
+        const transaction = db.transaction(
+            STORE_NAME,
+            "readonly"
+        );
 
-    return new Promise(
-        (resolve, reject) => {
+        const request = transaction
+            .objectStore(STORE_NAME)
+            .getAll();
 
-            const transaction =
-                db.transaction(
-                    STORE_NAME,
-                    "readonly"
-                );
+        request.onsuccess = function() {
+            resolve(request.result || []);
+        };
 
-
-            const store =
-                transaction.objectStore(
-                    STORE_NAME
-                );
-
-
-            const request =
-                store.getAll();
-
-
-            request.onsuccess =
-                function() {
-
-                    resolve(
-                        request.result || []
-                    );
-
-                };
-
-
-            request.onerror =
-                function() {
-
-                    reject(
-                        request.error
-                    );
-
-                };
-
-        }
-    );
-
+        request.onerror = function() {
+            reject(request.error);
+        };
+    });
 }
 
-
-/* =========================================================
-   GUARDAR ARCHIVO LOCAL
-   ========================================================= */
+/* GUARDAR ARCHIVO LOCAL */
 
 async function guardarArchivoLocal(item) {
-
     if (!db) {
         await abrirBaseDatos();
     }
 
+    return new Promise((resolve, reject) => {
+        const transaction = db.transaction(
+            STORE_NAME,
+            "readwrite"
+        );
 
-    return new Promise(
-        (resolve, reject) => {
+        transaction.objectStore(STORE_NAME).put(item);
 
-            const transaction =
-                db.transaction(
-                    STORE_NAME,
-                    "readwrite"
-                );
+        transaction.oncomplete = function() {
+            resolve();
+        };
 
-
-            const store =
-                transaction.objectStore(
-                    STORE_NAME
-                );
-
-
-            store.put(item);
-
-
-            transaction.oncomplete =
-                function() {
-
-                    resolve();
-
-                };
-
-
-            transaction.onerror =
-                function() {
-
-                    reject(
-                        transaction.error
-                    );
-
-                };
-
-        }
-    );
-
+        transaction.onerror = function() {
+            reject(transaction.error);
+        };
+    });
 }
 
-
-/* =========================================================
-   ELIMINAR ARCHIVO LOCAL
-   ========================================================= */
+/* ELIMINAR ARCHIVO LOCAL */
 
 async function borrarArchivoLocal(id) {
-
     if (!db) {
         await abrirBaseDatos();
     }
 
+    return new Promise((resolve, reject) => {
+        const transaction = db.transaction(
+            STORE_NAME,
+            "readwrite"
+        );
 
-    return new Promise(
-        (resolve, reject) => {
+        transaction.objectStore(STORE_NAME).delete(id);
 
-            const transaction =
-                db.transaction(
-                    STORE_NAME,
-                    "readwrite"
-                );
+        transaction.oncomplete = function() {
+            resolve();
+        };
 
-
-            transaction
-                .objectStore(STORE_NAME)
-                .delete(id);
-
-
-            transaction.oncomplete =
-                function() {
-
-                    resolve();
-
-                };
-
-
-            transaction.onerror =
-                function() {
-
-                    reject(
-                        transaction.error
-                    );
-
-                };
-
-        }
-    );
-
+        transaction.onerror = function() {
+            reject(transaction.error);
+        };
+    });
 }
-
 
 /* =========================================================
-   CONFIG LOCAL
-   ========================================================= */
+   CONFIGURACIÓN DEL MENÚ
+========================================================= */
 
 function obtenerConfiguracion() {
-
     try {
-
-        const guardada =
-            localStorage.getItem(
-                CONFIG_KEY
-            );
-
+        const guardada = localStorage.getItem(CONFIG_KEY);
 
         if (!guardada) {
-
-            return {
-                ...CONFIG_INICIAL
-            };
-
+            return { ...CONFIG_INICIAL };
         }
 
-
         return {
-
             ...CONFIG_INICIAL,
-
             ...JSON.parse(guardada)
-
         };
+    } catch (error) {
+        console.error(
+            "Error leyendo configuración:",
+            error
+        );
 
+        return { ...CONFIG_INICIAL };
     }
-
-    catch {
-
-        return {
-            ...CONFIG_INICIAL
-        };
-
-    }
-
 }
 
-
 function guardarConfiguracion(config) {
-
     localStorage.setItem(
         CONFIG_KEY,
         JSON.stringify(config)
     );
-
 }
 
-
 /* =========================================================
-   INICIO
+   INICIAR CARTELERA
 ========================================================= */
 
 async function iniciar() {
-
     try {
-
         await abrirBaseDatos();
 
-        // Archivos guardados desde el administrador.
-        const locales =
-            await obtenerArchivosLocales();
+        const locales = await obtenerArchivosLocales();
 
-        // Archivos encontrados automáticamente en GitHub.
-        const archivosGitHub =
-            await obtenerContenidoGitHub();
+        let contenidoGitHub = [];
 
-        // Rutas que ya estaban configuradas manualmente.
-        const rutasIniciales = new Set(
-            CONTENIDO_INICIAL.map(function(item) {
-                return item.archivo;
-            })
-        );
+        try {
+            contenidoGitHub = await obtenerContenidoGitHub(
+                "media"
+            );
+        } catch (errorGitHub) {
+            console.warn(
+                "MYCFOODS · No se pudo consultar GitHub.",
+                errorGitHub
+            );
+        }
 
-        // Evitar duplicar las fotos configuradas inicialmente.
-        const archivosGitHubNuevos =
-            archivosGitHub.filter(function(item) {
-                return !rutasIniciales.has(item.archivo);
-            });
+        const baseGitHub = contenidoGitHub.length
+            ? contenidoGitHub
+            : [...CONTENIDO_INICIAL];
 
-        // Combinar contenido inicial, GitHub y administrador.
-        contenido = [
-
-            ...CONTENIDO_INICIAL,
-
-            ...archivosGitHubNuevos,
-
-            ...locales
-
-        ];
-
-        // Evitar identificadores repetidos.
         const mapa = new Map();
 
-        contenido.forEach(function(item) {
+        baseGitHub.forEach(function(item) {
+            mapa.set(item.archivo || item.id, item);
+        });
 
+        locales.forEach(function(item) {
             mapa.set(item.id, item);
-
         });
 
         contenido = Array.from(mapa.values());
 
-        // Restaurar las URLs de los archivos locales.
         await reconstruirURLsLocales();
 
-        // Iniciar la reproducción.
         prepararContenido();
 
     } catch (error) {
-
         console.error(
             "MYCFOODS · Error iniciando cartelera:",
             error
         );
 
-        // Si falla la consulta, conservar el contenido inicial
-        // para que la cartelera pueda seguir funcionando.
-        contenido = [
-            ...CONTENIDO_INICIAL
-        ];
+        contenido = [...CONTENIDO_INICIAL];
 
         prepararContenido();
-
     }
-
 }
 
 /* =========================================================
    CONTENIDO ACTIVO
-   ========================================================= */
+========================================================= */
 
 function obtenerContenidoActivo() {
+    const activos = contenido.filter(function(item) {
+        return item.activo !== false;
+    });
 
-    let activos =
-        contenido.filter(
-            function(item) {
-
-                return item.activo !== false;
-
-            }
-        );
-
-
-    const config =
-        obtenerConfiguracion();
-
+    const config = obtenerConfiguracion();
 
     if (
         config.mostrarMenu &&
         config.texto.trim()
     ) {
-
         activos.push({
-
             id: "menu-del-dia",
-
             tipo: "menu",
-
             nombre: "Menú del Día",
-
-            duracion:
-                Number(config.duracion) || 10,
-
+            duracion: Number(config.duracion) || 10,
             activo: true,
-
             origen: "sistema"
-
         });
-
     }
 
-
     return activos;
-
 }
 
-
 /* =========================================================
-   PREPARAR
-   ========================================================= */
+   PREPARAR CARTELERA
+========================================================= */
 
 function prepararContenido() {
+    if (!pantalla) {
+        console.error(
+            "MYCFOODS · No se encontró el elemento #pantalla."
+        );
+        return;
+    }
 
-    const activos =
-        obtenerContenidoActivo();
-
+    const activos = obtenerContenidoActivo();
 
     if (!activos.length) {
-
         pantalla.innerHTML = `
-
             <div class="menu-slide">
-
-                <div class="menu-etiqueta">
-                    MYCFOODS
-                </div>
-
+                <div class="menu-etiqueta">MYCFOODS</div>
                 <div class="menu-texto">
                     Cartelera sin contenido
                 </div>
-
             </div>
-
         `;
 
         return;
-
     }
 
-
-    if (
-        posicion >= activos.length
-    ) {
-
+    if (posicion >= activos.length) {
         posicion = 0;
-
     }
-
 
     mostrarActual();
-
 }
 
-
 /* =========================================================
-   MOSTRAR ACTUAL
-   ========================================================= */
+   MOSTRAR CONTENIDO ACTUAL
+========================================================= */
 
 function mostrarActual() {
-
     limpiarTemporizador();
 
-
-    const activos =
-        obtenerContenidoActivo();
-
+    const activos = obtenerContenidoActivo();
 
     if (!activos.length) {
-
         prepararContenido();
-
         return;
-
     }
 
-
-    if (
-        posicion >= activos.length
-    ) {
-
+    if (posicion >= activos.length) {
         posicion = 0;
-
     }
 
-
-    const item =
-        activos[posicion];
-
+    const item = activos[posicion];
 
     pantalla.innerHTML = "";
-
-
     videoActual = null;
 
-
     if (item.tipo === "foto") {
-
         mostrarFoto(item);
-
-    }
-
-    else if (item.tipo === "video") {
-
+    } else if (item.tipo === "video") {
         mostrarVideo(item);
-
-    }
-
-    else if (item.tipo === "menu") {
-
+    } else if (item.tipo === "menu") {
         mostrarMenu();
-
     }
-
 }
 
-
 /* =========================================================
-   FOTO
-   ========================================================= */
+   MOSTRAR FOTO
+========================================================= */
 
 function mostrarFoto(item) {
+    const slide = document.createElement("div");
+    slide.className = "slide";
 
-    const slide =
-        document.createElement("div");
+    const imagen = document.createElement("img");
 
-
-    slide.className =
-        "slide";
-
-
-    const imagen =
-        document.createElement("img");
-
-
-    imagen.className =
-        "imagen-principal";
-
-
-    imagen.src =
-        item.archivo;
-
-
-    imagen.alt =
-        item.nombre || "MYCFOODS";
-
-
+    imagen.className = "imagen-principal";
+    imagen.src = item.archivo;
+    imagen.alt = item.nombre || "MYCFOODS";
     imagen.draggable = false;
 
+    imagen.onload = function() {
+        const fondo = document.createElement("img");
 
-    imagen.onload =
-        function() {
+        fondo.className = "fondo";
+        fondo.src = item.archivo;
+        fondo.alt = "";
 
-            const fondo =
-                document.createElement("img");
+        const degradado = document.createElement("div");
+        degradado.className = "degradado";
 
+        slide.appendChild(fondo);
+        slide.appendChild(imagen);
+        slide.appendChild(degradado);
 
-            fondo.className =
-                "fondo";
+        pantalla.appendChild(slide);
 
+        requestAnimationFrame(function() {
+            slide.classList.add("activo");
+        });
 
-            fondo.src =
-                item.archivo;
+        const segundos = Number(item.duracion) || 5;
 
+        temporizador = setTimeout(
+            siguiente,
+            segundos * 1000
+        );
+    };
 
-            fondo.alt = "";
+    imagen.onerror = function() {
+        console.error(
+            "MYCFOODS · Error cargando:",
+            item.archivo
+        );
 
-
-            const degradado =
-                document.createElement("div");
-
-
-            degradado.className =
-                "degradado";
-
-
-            slide.appendChild(fondo);
-
-            slide.appendChild(imagen);
-
-            slide.appendChild(degradado);
-
-
-            pantalla.appendChild(slide);
-
-
-            requestAnimationFrame(
-                function() {
-
-                    slide.classList.add(
-                        "activo"
-                    );
-
-                }
-            );
-
-
-            const segundos =
-                Number(item.duracion) || 5;
-
-
-            temporizador =
-                setTimeout(
-                    siguiente,
-                    segundos * 1000
-                );
-
-        };
-
-
-    imagen.onerror =
-        function() {
-
-            console.error(
-                "MYCFOODS · Error cargando:",
-                item.archivo
-            );
-
-
-            siguiente();
-
-        };
-
+        siguiente();
+    };
 }
 
-
 /* =========================================================
-   VIDEO
-   ========================================================= */
+   MOSTRAR VIDEO
+========================================================= */
 
 function mostrarVideo(item) {
+    const slide = document.createElement("div");
+    slide.className = "slide";
 
-    const slide =
-        document.createElement("div");
+    const video = document.createElement("video");
 
-
-    slide.className =
-        "slide";
-
-
-    const video =
-        document.createElement("video");
-
-
-    video.className =
-        "video-principal";
-
-
-    video.src =
-        item.archivo;
-
-
+    video.className = "video-principal";
+    video.src = item.archivo;
     video.autoplay = true;
-
     video.muted = true;
-
     video.playsInline = true;
-
     video.controls = false;
-
     video.preload = "auto";
-
 
     videoActual = video;
 
+    video.onloadeddata = function() {
+        slide.appendChild(video);
+        pantalla.appendChild(slide);
 
-    video.onloadeddata =
-        function() {
+        requestAnimationFrame(function() {
+            slide.classList.add("activo");
+        });
 
-            slide.appendChild(video);
-
-            pantalla.appendChild(slide);
-
-
-            requestAnimationFrame(
-                function() {
-
-                    slide.classList.add(
-                        "activo"
-                    );
-
-                }
+        video.play().catch(function(error) {
+            console.warn(
+                "MYCFOODS · No se pudo iniciar el video:",
+                error
             );
+        });
+    };
 
+    video.onended = function() {
+        siguiente();
+    };
 
-            video.play()
-                .catch(
-                    function(error) {
+    video.onerror = function() {
+        console.error(
+            "MYCFOODS · Error reproduciendo:",
+            item.archivo
+        );
 
-                        console.warn(
-                            "Autoplay bloqueado:",
-                            error
-                        );
-
-                    }
-                );
-
-        };
-
-
-    video.onended =
-        function() {
-
-            siguiente();
-
-        };
-
-
-    video.onerror =
-        function() {
-
-            console.error(
-                "MYCFOODS · Error reproduciendo:",
-                item.archivo
-            );
-
-
-            siguiente();
-
-        };
-
+        siguiente();
+    };
 }
 
-
 /* =========================================================
-   MENÚ DEL DÍA
-   ========================================================= */
+   MOSTRAR MENÚ DEL DÍA
+========================================================= */
 
 function mostrarMenu() {
+    const config = obtenerConfiguracion();
 
-    const config =
-        obtenerConfiguracion();
+    const slide = document.createElement("div");
+    slide.className = "slide";
 
+    const contenedor = document.createElement("div");
+    contenedor.className = "menu-slide";
 
-    const slide =
-        document.createElement("div");
+    const etiqueta = document.createElement("div");
+    etiqueta.className = "menu-etiqueta";
+    etiqueta.textContent = config.titulo || "MENÚ DEL DÍA";
 
+    const texto = document.createElement("div");
+    texto.className = "menu-texto";
+    texto.textContent = config.texto || "";
 
-    slide.className =
-        "slide";
+    contenedor.appendChild(etiqueta);
+    contenedor.appendChild(texto);
 
+    if (config.precio && config.precio.trim()) {
+        const precio = document.createElement("div");
 
-    const contenedor =
-        document.createElement("div");
+        precio.className = "menu-precio";
+        precio.textContent = config.precio;
 
-
-    contenedor.className =
-        "menu-slide";
-
-
-    const etiqueta =
-        document.createElement("div");
-
-
-    etiqueta.className =
-        "menu-etiqueta";
-
-
-    etiqueta.textContent =
-        config.titulo ||
-        "MENÚ DEL DÍA";
-
-
-    const texto =
-        document.createElement("div");
-
-
-    texto.className =
-        "menu-texto";
-
-
-    texto.textContent =
-        config.texto || "";
-
-
-    contenedor.appendChild(
-        etiqueta
-    );
-
-
-    contenedor.appendChild(
-        texto
-    );
-
-
-    if (
-        config.precio &&
-        config.precio.trim()
-    ) {
-
-        const precio =
-            document.createElement("div");
-
-
-        precio.className =
-            "menu-precio";
-
-
-        precio.textContent =
-            config.precio;
-
-
-        contenedor.appendChild(
-            precio
-        );
-
+        contenedor.appendChild(precio);
     }
 
+    slide.appendChild(contenedor);
+    pantalla.appendChild(slide);
 
-    slide.appendChild(
-        contenedor
+    requestAnimationFrame(function() {
+        slide.classList.add("activo");
+    });
+
+    temporizador = setTimeout(
+        siguiente,
+        (Number(config.duracion) || 10) * 1000
     );
-
-
-    pantalla.appendChild(
-        slide
-    );
-
-
-    requestAnimationFrame(
-        function() {
-
-            slide.classList.add(
-                "activo"
-            );
-
-        }
-    );
-
-
-    temporizador =
-        setTimeout(
-            siguiente,
-            (
-                Number(config.duracion) ||
-                10
-            ) * 1000
-        );
-
 }
 
-
 /* =========================================================
-   SIGUIENTE
-   ========================================================= */
+   SIGUIENTE CONTENIDO
+========================================================= */
 
 function siguiente() {
-
     limpiarTemporizador();
 
-
-    const activos =
-        obtenerContenidoActivo();
-
+    const activos = obtenerContenidoActivo();
 
     if (!activos.length) {
-
         return;
-
     }
-
 
     posicion++;
 
-
-    if (
-        posicion >= activos.length
-    ) {
-
+    if (posicion >= activos.length) {
         posicion = 0;
-
     }
 
-
     mostrarActual();
-
 }
-
 
 /* =========================================================
    TEMPORIZADOR
-   ========================================================= */
+========================================================= */
 
 function limpiarTemporizador() {
-
     if (temporizador) {
-
-        clearTimeout(
-            temporizador
-        );
-
+        clearTimeout(temporizador);
         temporizador = null;
-
     }
-
 }
-
 
 /* =========================================================
    ADMINISTRADOR
-   ========================================================= */
+========================================================= */
 
 function abrirAdministrador() {
-
-    if (adminAbierto) {
-        return;
-    }
-
+    if (adminAbierto) return;
 
     adminAbierto = true;
 
-
-    const panel =
-        document.createElement("div");
-
-
-    panel.id =
-        "admin-cartelera";
-
+    const panel = document.createElement("div");
+    panel.id = "admin-cartelera";
 
     panel.innerHTML = `
-
         <div class="admin-overlay">
-
             <div class="admin-panel">
 
                 <header class="admin-header">
-
                     <div>
-
-                        <div class="admin-logo">
-                            MYCFOODS
-                        </div>
-
+                        <div class="admin-logo">MYCFOODS</div>
                         <span class="admin-subtitulo">
                             Administrador de Cartelera
                         </span>
-
                     </div>
 
-
-                    <button
-                        class="admin-cerrar"
-                        id="adminCerrar"
-                    >
+                    <button class="admin-cerrar" id="adminCerrar">
                         ×
                     </button>
-
                 </header>
 
-
                 <div class="admin-body">
-
 
                     <h2 class="admin-titulo">
                         Contenido de la cartelera
                     </h2>
 
-
-                    <div
-                        class="admin-lista"
-                        id="adminLista"
-                    ></div>
-
+                    <div class="admin-lista" id="adminLista"></div>
 
                     <div class="admin-seccion">
-
-                        <h3>
-                            Agregar foto o video
-                        </h3>
-
+                        <h3>Agregar foto o video</h3>
 
                         <input
                             class="admin-file"
@@ -1174,7 +657,6 @@ function abrirAdministrador() {
                             accept="image/*,video/*"
                         >
 
-
                         <button
                             class="admin-primario"
                             id="adminAgregar"
@@ -1182,21 +664,14 @@ function abrirAdministrador() {
                             + AGREGAR A LA CARTELERA
                         </button>
 
-
                         <div
                             class="admin-mensaje"
                             id="adminMensaje"
                         ></div>
-
                     </div>
 
-
                     <div class="admin-seccion">
-
-                        <h3>
-                            Menú del Día
-                        </h3>
-
+                        <h3>Menú del Día</h3>
 
                         <input
                             class="admin-input"
@@ -1204,13 +679,11 @@ function abrirAdministrador() {
                             placeholder="Título"
                         >
 
-
                         <textarea
                             class="admin-textarea"
                             id="menuTexto"
-                            placeholder="Ejemplo: Suprema napolitana con puré de papa o omelette de queso con ensalada"
+                            placeholder="Descripción del menú"
                         ></textarea>
-
 
                         <input
                             class="admin-input"
@@ -1218,18 +691,13 @@ function abrirAdministrador() {
                             placeholder="Precio. Ejemplo: $13.500"
                         >
 
-
                         <label class="menu-check">
-
                             <input
                                 type="checkbox"
                                 id="menuMostrar"
                             >
-
                             Mostrar Menú del Día en la cartelera
-
                         </label>
-
 
                         <button
                             class="admin-primario"
@@ -1237,960 +705,439 @@ function abrirAdministrador() {
                         >
                             GUARDAR MENÚ DEL DÍA
                         </button>
-
                     </div>
 
-
                     <div class="admin-seccion">
-
-                        <h3>
-                            Información
-                        </h3>
+                        <h3>Información</h3>
 
                         <div class="admin-mensaje">
-
                             Los archivos agregados desde este
                             administrador quedan guardados
                             en esta computadora y navegador.
 
                             Los archivos originales de GitHub
                             permanecen intactos.
-
                         </div>
-
                     </div>
 
-
                 </div>
-
             </div>
-
         </div>
-
     `;
 
-
-    document.body.appendChild(
-        panel
-    );
-
+    document.body.appendChild(panel);
 
     cargarAdministrador();
 
-
-    document
-        .getElementById("adminCerrar")
-        .onclick =
+    document.getElementById("adminCerrar").onclick =
         cerrarAdministrador;
 
-
-    document
-        .getElementById("adminAgregar")
-        .onclick =
+    document.getElementById("adminAgregar").onclick =
         agregarArchivo;
 
-
-    document
-        .getElementById("menuGuardar")
-        .onclick =
+    document.getElementById("menuGuardar").onclick =
         guardarMenuDesdeAdmin;
-
 }
 
-
-/* =========================================================
-   CERRAR ADMIN
-   ========================================================= */
+/* CERRAR ADMINISTRADOR */
 
 function cerrarAdministrador() {
-
-    const panel =
-        document.getElementById(
-            "admin-cartelera"
-        );
-
+    const panel = document.getElementById("admin-cartelera");
 
     if (panel) {
-
         panel.remove();
-
     }
-
 
     adminAbierto = false;
-
-
     posicion = 0;
 
-
     prepararContenido();
-
 }
 
-
-/* =========================================================
-   CARGAR ADMIN
-   ========================================================= */
+/* CARGAR ADMINISTRADOR */
 
 function cargarAdministrador() {
-
     cargarListaAdmin();
-
     cargarFormularioMenu();
-
 }
 
-
 /* =========================================================
-   LISTA ADMIN
-   ========================================================= */
+   LISTA DE CONTENIDOS DEL ADMINISTRADOR
+========================================================= */
 
 function cargarListaAdmin() {
+    const lista = document.getElementById("adminLista");
 
-    const lista =
-        document.getElementById(
-            "adminLista"
-        );
-
-
-    if (!lista) {
-        return;
-    }
-
+    if (!lista) return;
 
     lista.innerHTML = "";
 
+    contenido.forEach(function(item, index) {
+        const fila = document.createElement("div");
+        fila.className = "admin-item";
 
-    contenido.forEach(
-        function(item, index) {
+        const numero = document.createElement("div");
+        numero.className = "admin-numero";
+        numero.textContent = index + 1;
 
-            const fila =
-                document.createElement(
-                    "div"
+        const info = document.createElement("div");
+        info.className = "admin-info";
+
+        const nombre = document.createElement("strong");
+        nombre.textContent = item.nombre || "Contenido";
+
+        const tipo = document.createElement("small");
+        tipo.textContent = item.tipo +
+            (item.activo === false ? " · OCULTO" : "");
+
+        info.appendChild(nombre);
+        info.appendChild(tipo);
+
+        fila.appendChild(numero);
+        fila.appendChild(info);
+
+        if (item.tipo !== "video") {
+            const duracion = document.createElement("input");
+
+            duracion.className = "admin-duracion";
+            duracion.type = "number";
+            duracion.min = "1";
+            duracion.value = Number(item.duracion) || 5;
+            duracion.title = "Segundos";
+
+            duracion.onchange = async function() {
+                item.duracion = Math.max(
+                    1,
+                    Number(duracion.value) || 5
                 );
 
+                await guardarItemSiLocal(item);
+            };
 
-            fila.className =
-                "admin-item";
-
-
-            const numero =
-                document.createElement(
-                    "div"
-                );
-
-
-            numero.className =
-                "admin-numero";
-
-
-            numero.textContent =
-                index + 1;
-
-
-            const info =
-                document.createElement(
-                    "div"
-                );
-
-
-            info.className =
-                "admin-info";
-
-
-            const nombre =
-                document.createElement(
-                    "strong"
-                );
-
-
-            nombre.textContent =
-                item.nombre ||
-                "Contenido";
-
-
-            const tipo =
-                document.createElement(
-                    "small"
-                );
-
-
-            tipo.textContent =
-                item.tipo +
-                (
-                    item.activo === false
-                    ? " · OCULTO"
-                    : ""
-                );
-
-
-            info.appendChild(
-                nombre
-            );
-
-
-            info.appendChild(
-                tipo
-            );
-
-
-            fila.appendChild(
-                numero
-            );
-
-
-            fila.appendChild(
-                info
-            );
-
-
-            if (
-                item.tipo !== "video"
-            ) {
-
-                const duracion =
-                    document.createElement(
-                        "input"
-                    );
-
-
-                duracion.className =
-                    "admin-duracion";
-
-
-                duracion.type =
-                    "number";
-
-
-                duracion.min = "1";
-
-
-                duracion.value =
-                    Number(item.duracion) ||
-                    5;
-
-
-                duracion.title =
-                    "Segundos";
-
-
-                duracion.onchange =
-                    async function() {
-
-                        item.duracion =
-                            Math.max(
-                                1,
-                                Number(
-                                    duracion.value
-                                ) || 5
-                            );
-
-
-                        await guardarItemSiLocal(
-                            item
-                        );
-
-                    };
-
-
-                fila.appendChild(
-                    duracion
-                );
-
-            }
-
-
-            const subir =
-                crearBoton(
-                    "↑",
-                    "admin-btn"
-                );
-
-
-            subir.onclick =
-                function() {
-
-                    moverContenido(
-                        index,
-                        -1
-                    );
-
-                };
-
-
-            fila.appendChild(
-                subir
-            );
-
-
-            const bajar =
-                crearBoton(
-                    "↓",
-                    "admin-btn"
-                );
-
-
-            bajar.onclick =
-                function() {
-
-                    moverContenido(
-                        index,
-                        1
-                    );
-
-                };
-
-
-            fila.appendChild(
-                bajar
-            );
-
-
-            const activar =
-                crearBoton(
-                    item.activo === false
-                        ? "Mostrar"
-                        : "Ocultar",
-                    "admin-btn"
-                );
-
-
-            activar.onclick =
-                async function() {
-
-                    item.activo =
-                        item.activo === false;
-
-
-                    await guardarItemSiLocal(
-                        item
-                    );
-
-
-                    cargarListaAdmin();
-
-
-                    posicion = 0;
-
-                    prepararContenido();
-
-                };
-
-
-            fila.appendChild(
-                activar
-            );
-
-
-            if (
-                item.origen === "local"
-            ) {
-
-                const eliminar =
-                    crearBoton(
-                        "Eliminar",
-                        "admin-btn danger"
-                    );
-
-
-                eliminar.onclick =
-                    function() {
-
-                        eliminarContenido(
-                            item,
-                            index
-                        );
-
-                    };
-
-
-                fila.appendChild(
-                    eliminar
-                );
-
-            }
-
-
-            lista.appendChild(
-                fila
-            );
-
+            fila.appendChild(duracion);
         }
-    );
 
-}
+        const subir = crearBoton("↑", "admin-btn");
 
+        subir.onclick = function() {
+            moverContenido(index, -1);
+        };
 
-/* =========================================================
-   CREAR BOTÓN
-   ========================================================= */
+        fila.appendChild(subir);
 
-function crearBoton(
-    texto,
-    clase
-) {
+        const bajar = crearBoton("↓", "admin-btn");
 
-    const boton =
-        document.createElement(
-            "button"
+        bajar.onclick = function() {
+            moverContenido(index, 1);
+        };
+
+        fila.appendChild(bajar);
+
+        const activar = crearBoton(
+            item.activo === false ? "Mostrar" : "Ocultar",
+            "admin-btn"
         );
 
+        activar.onclick = async function() {
+            item.activo = item.activo === false;
 
-    boton.className =
-        clase;
+            await guardarItemSiLocal(item);
 
+            cargarListaAdmin();
 
-    boton.textContent =
-        texto;
+            posicion = 0;
+            prepararContenido();
+        };
 
+        fila.appendChild(activar);
 
-    return boton;
+        if (item.origen === "local") {
+            const eliminar = crearBoton(
+                "Eliminar",
+                "admin-btn danger"
+            );
 
+            eliminar.onclick = function() {
+                eliminarContenido(item, index);
+            };
+
+            fila.appendChild(eliminar);
+        }
+
+        lista.appendChild(fila);
+    });
 }
 
+/* CREAR BOTÓN */
 
-/* =========================================================
-   MOVER CONTENIDO
-   ========================================================= */
+function crearBoton(texto, clase) {
+    const boton = document.createElement("button");
 
-async function moverContenido(
-    index,
-    direccion
-) {
+    boton.className = clase;
+    boton.textContent = texto;
 
-    const nuevoIndice =
-        index + direccion;
+    return boton;
+}
 
+/* MOVER CONTENIDO */
+
+async function moverContenido(index, direccion) {
+    const nuevoIndice = index + direccion;
 
     if (
         nuevoIndice < 0 ||
         nuevoIndice >= contenido.length
     ) {
-
         return;
-
     }
 
+    const temporal = contenido[index];
 
-    const temporal =
-        contenido[index];
+    contenido[index] = contenido[nuevoIndice];
+    contenido[nuevoIndice] = temporal;
 
+    for (let i = 0; i < contenido.length; i++) {
+        contenido[i].orden = i;
 
-    contenido[index] =
-        contenido[nuevoIndice];
-
-
-    contenido[nuevoIndice] =
-        temporal;
-
-
-    for (
-        let i = 0;
-        i < contenido.length;
-        i++
-    ) {
-
-        contenido[i].orden =
-            i;
-
-        await guardarItemSiLocal(
-            contenido[i]
-        );
-
+        await guardarItemSiLocal(contenido[i]);
     }
-
 
     cargarListaAdmin();
 
-
     posicion = 0;
-
     prepararContenido();
-
 }
 
-
-/* =========================================================
-   GUARDAR ITEM LOCAL
-   ========================================================= */
+/* GUARDAR SOLO LOS ELEMENTOS LOCALES */
 
 async function guardarItemSiLocal(item) {
+    if (item.origen !== "local") return;
 
-    if (
-        item.origen !== "local"
-    ) {
-
-        return;
-
-    }
-
-
-    await guardarArchivoLocal(
-        item
-    );
-
+    await guardarArchivoLocal(item);
 }
 
+/* ELIMINAR CONTENIDO LOCAL */
 
-/* =========================================================
-   ELIMINAR CONTENIDO
-   ========================================================= */
+async function eliminarContenido(item, index) {
+    if (item.origen !== "local") return;
 
-async function eliminarContenido(
-    item,
-    index
-) {
-
-    if (
-        item.origen !== "local"
-    ) {
-
-        return;
-
-    }
-
-
-    const confirmar =
-        confirm(
-            "¿Eliminar este contenido de la cartelera?"
-        );
-
-
-    if (!confirmar) {
-        return;
-    }
-
-
-    await borrarArchivoLocal(
-        item.id
+    const confirmar = confirm(
+        "¿Eliminar este contenido de la cartelera?"
     );
 
+    if (!confirmar) return;
 
-    contenido.splice(
-        index,
-        1
-    );
+    await borrarArchivoLocal(item.id);
 
+    if (item.archivo && item.archivo.startsWith("blob:")) {
+        URL.revokeObjectURL(item.archivo);
+    }
+
+    contenido.splice(index, 1);
 
     cargarListaAdmin();
 
-
     posicion = 0;
-
     prepararContenido();
-
 }
 
-
 /* =========================================================
-   AGREGAR FOTO / VIDEO
-   ========================================================= */
+   AGREGAR FOTO O VIDEO DESDE EL ADMINISTRADOR
+========================================================= */
 
 async function agregarArchivo() {
+    const input = document.getElementById("adminArchivo");
+    const mensaje = document.getElementById("adminMensaje");
 
-    const input =
-        document.getElementById(
-            "adminArchivo"
-        );
-
-
-    const mensaje =
-        document.getElementById(
-            "adminMensaje"
-        );
-
-
-    if (
-        !input ||
-        !input.files ||
-        !input.files.length
-    ) {
-
+    if (!input || !input.files || !input.files.length) {
         mensaje.textContent =
             "Seleccioná primero una foto o video.";
 
         return;
-
     }
 
+    const archivo = input.files[0];
 
-    const archivo =
-        input.files[0];
-
-
-    const tipo =
-        archivo.type.startsWith(
-            "video/"
-        )
+    const tipo = archivo.type.startsWith("video/")
         ? "video"
         : "foto";
 
-
-    const id =
-        "local-" +
-        Date.now() +
-        "-" +
-        Math.random()
-            .toString(36)
-            .substring(2);
-
+    const id = "local-" + Date.now() + "-" +
+        Math.random().toString(36).substring(2);
 
     const nuevo = {
-
         id: id,
-
         tipo: tipo,
-
-        nombre:
-            archivo.name,
-
-        blob:
-            archivo,
-
-        duracion:
-            tipo === "foto"
-                ? 5
-                : 0,
-
+        nombre: archivo.name,
+        blob: archivo,
+        duracion: tipo === "foto" ? 5 : 0,
         activo: true,
-
         origen: "local",
-
-        orden:
-            contenido.length
-
+        orden: contenido.length
     };
 
-
     try {
+        await guardarArchivoLocal(nuevo);
 
-        await guardarArchivoLocal(
-            nuevo
-        );
+        nuevo.archivo = URL.createObjectURL(archivo);
 
-
-        nuevo.archivo =
-            URL.createObjectURL(
-                archivo
-            );
-
-
-        contenido.push(
-            nuevo
-        );
-
+        contenido.push(nuevo);
 
         input.value = "";
-
 
         mensaje.textContent =
             "Contenido agregado correctamente.";
 
-
         cargarListaAdmin();
 
-
         posicion = 0;
-
         prepararContenido();
 
-    }
-
-    catch(error) {
-
-        console.error(
-            error
-        );
-
+    } catch (error) {
+        console.error(error);
 
         mensaje.textContent =
             "No se pudo guardar el archivo.";
-
     }
-
 }
 
-
 /* =========================================================
-   RECONSTRUIR URLs DE ARCHIVOS LOCALES
-   ========================================================= */
+   RECONSTRUIR URL DE ARCHIVOS LOCALES
+========================================================= */
 
 async function reconstruirURLsLocales() {
-
-    for (
-        const item of contenido
-    ) {
-
+    for (const item of contenido) {
         if (
             item.origen === "local" &&
             item.blob &&
             !item.archivo
         ) {
-
-            item.archivo =
-                URL.createObjectURL(
-                    item.blob
-                );
-
+            item.archivo = URL.createObjectURL(item.blob);
         }
-
     }
-
 }
 
-
 /* =========================================================
-   FORMULARIO MENÚ
-   ========================================================= */
+   FORMULARIO DEL MENÚ
+========================================================= */
 
 function cargarFormularioMenu() {
+    const config = obtenerConfiguracion();
 
-    const config =
-        obtenerConfiguracion();
-
-
-    const titulo =
-        document.getElementById(
-            "menuTitulo"
-        );
-
-
-    const texto =
-        document.getElementById(
-            "menuTexto"
-        );
-
-
-    const precio =
-        document.getElementById(
-            "menuPrecio"
-        );
-
-
-    const mostrar =
-        document.getElementById(
-            "menuMostrar"
-        );
-
+    const titulo = document.getElementById("menuTitulo");
+    const texto = document.getElementById("menuTexto");
+    const precio = document.getElementById("menuPrecio");
+    const mostrar = document.getElementById("menuMostrar");
 
     if (titulo) {
-
-        titulo.value =
-            config.titulo || "";
-
+        titulo.value = config.titulo || "";
     }
-
 
     if (texto) {
-
-        texto.value =
-            config.texto || "";
-
+        texto.value = config.texto || "";
     }
-
 
     if (precio) {
-
-        precio.value =
-            config.precio || "";
-
+        precio.value = config.precio || "";
     }
-
 
     if (mostrar) {
-
-        mostrar.checked =
-            config.mostrarMenu === true;
-
+        mostrar.checked = config.mostrarMenu === true;
     }
-
 }
 
-
-/* =========================================================
-   GUARDAR MENÚ
-   ========================================================= */
+/* GUARDAR MENÚ DEL DÍA */
 
 function guardarMenuDesdeAdmin() {
-
-    const titulo =
-        document.getElementById(
-            "menuTitulo"
-        );
-
-
-    const texto =
-        document.getElementById(
-            "menuTexto"
-        );
-
-
-    const precio =
-        document.getElementById(
-            "menuPrecio"
-        );
-
-
-    const mostrar =
-        document.getElementById(
-            "menuMostrar"
-        );
-
+    const titulo = document.getElementById("menuTitulo");
+    const texto = document.getElementById("menuTexto");
+    const precio = document.getElementById("menuPrecio");
+    const mostrar = document.getElementById("menuMostrar");
 
     const config = {
-
-        titulo:
-            titulo.value.trim() ||
-            "MENÚ DEL DÍA",
-
-        texto:
-            texto.value.trim(),
-
-        precio:
-            precio.value.trim(),
-
-        mostrarMenu:
-            mostrar.checked,
-
-        duracion:
-            7
-
+        titulo: titulo.value.trim() || "MENÚ DEL DÍA",
+        texto: texto.value.trim(),
+        precio: precio.value.trim(),
+        mostrarMenu: mostrar.checked,
+        duracion: 7
     };
 
-
-    guardarConfiguracion(
-        config
-    );
-
+    guardarConfiguracion(config);
 
     posicion = 0;
 
-
     prepararContenido();
 
-
-    const mensaje =
-        document.getElementById(
-            "adminMensaje"
-        );
-
+    const mensaje = document.getElementById("adminMensaje");
 
     if (mensaje) {
-
-        mensaje.textContent =
-            "Menú del Día guardado.";
-
+        mensaje.textContent = "Menú del Día guardado.";
     }
-
 }
 
-
 /* =========================================================
-   ATAJO ADMIN
+   ATAJO PARA ABRIR EL ADMINISTRADOR
    CTRL + ALT + A
-   ========================================================= */
+========================================================= */
 
-document.addEventListener(
-    "keydown",
-    function(event) {
-
-        if (
-            event.ctrlKey &&
-            event.altKey &&
-            event.key.toLowerCase() === "a"
-        ) {
-
-            event.preventDefault();
-
-            abrirAdministrador();
-
-        }
-
-
-        if (
-            event.key === "Escape" &&
-            adminAbierto
-        ) {
-
-            cerrarAdministrador();
-
-        }
-
+document.addEventListener("keydown", function(event) {
+    if (
+        event.ctrlKey &&
+        event.altKey &&
+        event.key.toLowerCase() === "a"
+    ) {
+        event.preventDefault();
+        abrirAdministrador();
     }
-);
 
+    if (event.key === "Escape" && adminAbierto) {
+        cerrarAdministrador();
+    }
+});
 
 /* =========================================================
-   ABRIR ADMIN POR URL
-   ========================================================= */
+   ABRIR ADMINISTRADOR MEDIANTE URL
+   Agregar ?admin=1 a la dirección
+========================================================= */
 
 function comprobarModoAdminURL() {
+    const parametros = new URLSearchParams(
+        window.location.search
+    );
 
-    const parametros =
-        new URLSearchParams(
-            window.location.search
-        );
-
-
-    if (
-        parametros.get("admin") === "1"
-    ) {
-
+    if (parametros.get("admin") === "1") {
         abrirAdministrador();
-
     }
-
 }
 
-
 /* =========================================================
-   LIMPIEZA DE URLs TEMPORALES
-   ========================================================= */
+   LIMPIEZA DE URL TEMPORALES
+========================================================= */
 
-window.addEventListener(
-    "beforeunload",
-    function() {
-
-        contenido.forEach(
-            function(item) {
-
-                if (
-                    item.origen === "local" &&
-                    item.archivo &&
-                    item.archivo.startsWith(
-                        "blob:"
-                    )
-                ) {
-
-                    try {
-
-                        URL.revokeObjectURL(
-                            item.archivo
-                        );
-
-                    }
-
-                    catch {}
-
-                }
-
+window.addEventListener("beforeunload", function() {
+    contenido.forEach(function(item) {
+        if (
+            item.origen === "local" &&
+            item.archivo &&
+            item.archivo.startsWith("blob:")
+        ) {
+            try {
+                URL.revokeObjectURL(item.archivo);
+            } catch (error) {
+                // No se requiere ninguna acción.
             }
-        );
-
-    }
-);
-
+        }
+    });
+});
 
 /* =========================================================
    INICIO FINAL
-   ========================================================= */
+========================================================= */
 
 (async function() {
-
     await iniciar();
 
     prepararContenido();
 
     comprobarModoAdminURL();
-
 })();
