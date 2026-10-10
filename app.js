@@ -1,88 +1,162 @@
 /* =========================================================
-   MYCFOODS · CARTELERA DIGITAL
-   SISTEMA COMPLETO
-   ========================================================= */
+   MYCFOODS · CARGA AUTOMÁTICA DESDE GITHUB
+   Detecta fotos y videos dentro de la carpeta media
+========================================================= */
 
+async function obtenerContenidoGitHub() {
 
-/* =========================================================
-   CONFIGURACIÓN
-   ========================================================= */
+    const API_BASE =
+        "https://api.github.com/repos/mycfoods/cartelera/contents/";
 
-const DB_NAME = "mycfoods_cartelera";
+    const extensionesFoto = [
+        ".jpg",
+        ".jpeg",
+        ".png",
+        ".webp",
+        ".gif",
+        ".avif"
+    ];
 
-const DB_VERSION = 1;
+    const extensionesVideo = [
+        ".mp4",
+        ".webm",
+        ".mov",
+        ".m4v",
+        ".ogv"
+    ];
 
-const STORE_NAME = "medios";
+    const archivosEncontrados = [];
 
-const CONFIG_KEY = "mycfoods_cartelera_config";
+    async function recorrerCarpeta(ruta) {
 
+        try {
 
-/* =========================================================
-   CONTENIDO INICIAL
-   Estos son tus archivos actuales de GitHub.
-   ========================================================= */
+            const respuesta = await fetch(
+                API_BASE +
+                ruta.split("/").map(encodeURIComponent).join("/") +
+                "?ref=main",
+                {
+                    headers: {
+                        "Accept": "application/vnd.github+json"
+                    }
+                }
+            );
 
-const CONTENIDO_INICIAL = [
+            if (!respuesta.ok) {
 
-    {
-        id: "github-foto-1",
+                console.warn(
+                    "MYCFOODS · No se pudo consultar:",
+                    ruta,
+                    respuesta.status
+                );
 
-        tipo: "foto",
+                return;
 
-        archivo:
-            "media/fotos/Albóndigas con salsa y puré de papas_20260922_095614_0000.png",
+            }
 
-        nombre:
-            "Albóndigas con salsa y puré de papas",
+            const elementos = await respuesta.json();
 
-        duracion: 5,
+            if (!Array.isArray(elementos)) {
+                return;
+            }
 
-        activo: true,
+            elementos.sort(function(a, b) {
 
-        origen: "github"
-    },
+                return a.name.localeCompare(
+                    b.name,
+                    "es",
+                    {
+                        numeric: true,
+                        sensitivity: "base"
+                    }
+                );
 
+            });
 
-    {
-        id: "github-foto-2",
+            for (const elemento of elementos) {
 
-        tipo: "foto",
+                if (elemento.type === "dir") {
 
-        archivo:
-            "media/fotos/box_dia_de_la_madre_historia-4.jpg",
+                    await recorrerCarpeta(elemento.path);
 
-        nombre:
-            "Box Día de la Madre",
+                    continue;
 
-        duracion: 5,
+                }
 
-        activo: true,
+                if (elemento.type !== "file") {
+                    continue;
+                }
 
-        origen: "github"
-    },
+                const nombreArchivo =
+                    elemento.name.toLowerCase();
 
+                const esFoto =
+                    extensionesFoto.some(function(extension) {
+                        return nombreArchivo.endsWith(extension);
+                    });
 
-    {
-        id: "github-foto-3",
+                const esVideo =
+                    extensionesVideo.some(function(extension) {
+                        return nombreArchivo.endsWith(extension);
+                    });
 
-        tipo: "foto",
+                if (!esFoto && !esVideo) {
+                    continue;
+                }
 
-        archivo:
-            "media/fotos/file_00000000ee40820eb02e991bf44310ad.png",
+                archivosEncontrados.push({
 
-        nombre:
-            "Foto MYCFOODS",
+                    id: "github-auto-" + elemento.path,
 
-        duracion: 5,
+                    tipo: esVideo ? "video" : "foto",
 
-        activo: true,
+                    archivo: elemento.path,
 
-        origen: "github"
+                    nombre: elemento.name.replace(
+                        /\.(jpg|jpeg|png|webp|gif|avif|mp4|webm|mov|m4v|ogv)$/i,
+                        ""
+                    ).replace(/[_-]+/g, " "),
+
+                    duracion: 5,
+
+                    activo: true,
+
+                    origen: "github"
+
+                });
+
+            }
+
+        } catch (error) {
+
+            console.error(
+                "MYCFOODS · Error leyendo carpeta:",
+                ruta,
+                error
+            );
+
+        }
+
     }
 
-];
+    await recorrerCarpeta("media");
 
+    archivosEncontrados.sort(function(a, b) {
 
+        return a.archivo.localeCompare(
+            b.archivo,
+            "es",
+            {
+                numeric: true,
+                sensitivity: "base"
+            }
+        );
+
+    });
+
+    return archivosEncontrados;
+
+}
 /* =========================================================
    CONFIGURACIÓN DEL MENÚ
    ========================================================= */
@@ -403,7 +477,7 @@ function guardarConfiguracion(config) {
 
 /* =========================================================
    INICIO
-   ========================================================= */
+========================================================= */
 
 async function iniciar() {
 
@@ -411,67 +485,73 @@ async function iniciar() {
 
         await abrirBaseDatos();
 
-
+        // Archivos guardados desde el administrador.
         const locales =
             await obtenerArchivosLocales();
 
+        // Archivos encontrados automáticamente en GitHub.
+        const archivosGitHub =
+            await obtenerContenidoGitHub();
 
+        // Rutas que ya estaban configuradas manualmente.
+        const rutasIniciales = new Set(
+            CONTENIDO_INICIAL.map(function(item) {
+                return item.archivo;
+            })
+        );
+
+        // Evitar duplicar las fotos configuradas inicialmente.
+        const archivosGitHubNuevos =
+            archivosGitHub.filter(function(item) {
+                return !rutasIniciales.has(item.archivo);
+            });
+
+        // Combinar contenido inicial, GitHub y administrador.
         contenido = [
 
             ...CONTENIDO_INICIAL,
+
+            ...archivosGitHubNuevos,
 
             ...locales
 
         ];
 
+        // Evitar identificadores repetidos.
+        const mapa = new Map();
 
-        const mapa =
-            new Map();
+        contenido.forEach(function(item) {
 
+            mapa.set(item.id, item);
 
-        contenido.forEach(
-            function(item) {
+        });
 
-                mapa.set(
-                    item.id,
-                    item
-                );
+        contenido = Array.from(mapa.values());
 
-            }
-        );
-
-
-        contenido =
-            Array.from(
-                mapa.values()
-            );
-
-
+        // Restaurar las URLs de los archivos locales.
         await reconstruirURLsLocales();
 
-
+        // Iniciar la reproducción.
         prepararContenido();
 
-    }
-
-    catch(error) {
+    } catch (error) {
 
         console.error(
             "MYCFOODS · Error iniciando cartelera:",
             error
         );
 
-
-        contenido =
-            [...CONTENIDO_INICIAL];
-
+        // Si falla la consulta, conservar el contenido inicial
+        // para que la cartelera pueda seguir funcionando.
+        contenido = [
+            ...CONTENIDO_INICIAL
+        ];
 
         prepararContenido();
 
     }
 
 }
-
 
 /* =========================================================
    CONTENIDO ACTIVO
